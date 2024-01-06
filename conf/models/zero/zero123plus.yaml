@@ -1,0 +1,4 @@
+_target_: 'diffusers.DiffusionPipeline.from_pretrained'
+pretrained_model_name_or_path: 'sudo-ai/zero123plus-v1.1'
+custom_pipeline: "sudo-ai/zero123plus-pipeline"
+safety_checker: null

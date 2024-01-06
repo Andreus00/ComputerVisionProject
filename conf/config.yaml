@@ -1,0 +1,20 @@
+core:
+  dtype: 
+    _target_: src.utils.utils.getTorchType
+    string: float16
+    
+  device: cuda
+
+misc:
+  prompt: 'a mountain bike'
+  edit: 'make it like a city bike'
+  seed: 42
+
+output:
+  out_path: 'out/'
+  generate: ${out_path}-sd.png
+  zero: ${out_path}-zero.png
+  edit: ${out_path}-p2p.png
+
+defaults:
+  - models: default
