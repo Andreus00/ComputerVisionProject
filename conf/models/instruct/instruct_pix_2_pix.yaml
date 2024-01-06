@@ -1,0 +1,3 @@
+_target_: 'diffusers.StableDiffusionInstructPix2PixPipeline.from_pretrained'
+pretrained_model_name_or_path: 'timbrooks/instruct-pix2pix'
+safety_checker: null
