@@ -1,6 +1,11 @@
 
 device: ${core.device}
 
+hyperparams:
+  instruct:
+    guidance_scale: 7.5
+    image_guidance_scale: 1.5
+
 defaults:
   - sd: stable_diffusion
   - inpainting: stable_inpainting

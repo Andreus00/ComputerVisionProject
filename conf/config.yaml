@@ -6,15 +6,17 @@ core:
   device: cuda
 
 misc:
-  prompt: 'a mountain bike'
-  edit: 'make it like a city bike'
-  seed: 42
+  load_image_path: "/home/andrea/Scaricati/mushroom.png"
+  prompt: 'A statue of a man with a sword behind'
+  edit: 'make it made of gold'
+  seed: 41
 
+out_path: 'out/'
 output:
-  out_path: 'out/'
-  generate: ${out_path}-sd.png
-  zero: ${out_path}-zero.png
-  edit: ${out_path}-p2p.png
+  generate: ${out_path}sd.png
+  zero: ${out_path}zero.png
+  zero_edited: ${out_path}zero_edited.png
+  edit: ${out_path}p2p.png
 
 defaults:
   - models: default

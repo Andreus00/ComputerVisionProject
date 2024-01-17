@@ -13,20 +13,31 @@ def my_app(cfg : DictConfig) -> None:
     model = Edit2DFromPrompt(cfg.models)
 
     # Generate an image
-    image = model.generate(cfg.misc.prompt, seed=cfg.misc.seed)
-    image.save(cfg.output.generate)
+    if cfg.misc.load_image_path == "":
+        image = model.generate(cfg.misc.prompt, seed=cfg.misc.seed)
+        image.save(cfg.output.generate)
+    else:
+        # open png image
+        import PIL
+        image = PIL.Image.open(cfg.misc.load_image_path).convert('RGB')
+        image.save(cfg.output.generate)
+
 
     # Edit an image
     edit_kwargs = {
-        "guidance_scale": 10,
-        "image_guidance_scale": 1.5,
+        "guidance_scale": cfg.models.hyperparams.instruct.guidance_scale,
+        "image_guidance_scale": cfg.models.hyperparams.instruct.image_guidance_scale,
     }
-    image = model.edit(cfg.misc.edit, image, seed=cfg.misc.seed, kwargs=edit_kwargs)
-    image.save(cfg.output.edit)
+    edit_image = model.edit(cfg.misc.edit, image, seed=cfg.misc.seed, kwargs=edit_kwargs)
+    edit_image.save(cfg.output.edit)
 
     # zero123
-    image = model.novelViews(image, seed=cfg.misc.seed)
-    image.save(cfg.output.zero)
+    edit_image_novel = model.novelViews(edit_image, seed=cfg.misc.seed)
+    edit_image_novel.save(cfg.output.zero_edited)
+
+    # zero123
+    image_novel = model.novelViews(image, seed=cfg.misc.seed)
+    image_novel.save(cfg.output.zero)
 
 
 
