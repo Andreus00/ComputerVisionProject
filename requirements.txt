@@ -3,3 +3,5 @@ transformers
 diffusers
 hydra-core
 torchvision
+accelerate
+gdown

@@ -2,6 +2,7 @@ core:
   dtype: 
     _target_: src.utils.utils.getTorchType
     string: float16
+  cache_dir: cache
     
   device: cuda
 

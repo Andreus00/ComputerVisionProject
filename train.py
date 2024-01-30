@@ -12,9 +12,14 @@
 import os
 import torch
 from random import randint
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), "gaussian-splatting"))
+sys.path.append(os.path.join(os.path.dirname(__file__), 
+                             "gaussian-splatting/submodules/diff-gaussian-rasterization"))
+sys.path.append(os.path.join(os.path.dirname(__file__), 
+                             "gaussian-splatting/submodules/simple-knn"))
 from utils.loss_utils import l1_loss, ssim
 from gaussian_renderer import render, network_gui
-import sys
 from scene_2 import Scene, GaussianModel
 from utils.general_utils import safe_state
 import uuid
@@ -206,6 +211,7 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     args = parser.parse_args(sys.argv[1:])
+
     args.save_iterations.append(args.iterations)
     
     print("Optimizing " + args.model_path)

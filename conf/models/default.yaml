@@ -1,6 +1,8 @@
 
 device: ${core.device}
 
+cache_dir: ${core.cache_dir}
+
 hyperparams:
   instruct:
     guidance_scale: 7.5

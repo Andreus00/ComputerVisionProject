@@ -4,6 +4,7 @@ import torch
 from typing import Optional, Union
 from PIL import Image
 import os
+import numpy as np
 from diffusers import StableDiffusionInstructPix2PixPipeline, EulerAncestralDiscreteScheduler
 
 class Edit3DFromPromptAnd2DImage():
@@ -12,9 +13,9 @@ class Edit3DFromPromptAnd2DImage():
         self.cfg = cfg
         if dtype is None:
             dtype = torch.float16
-        self.sd = hydra.utils.call(cfg.sd, torch_dtype=dtype).to(cfg.device)
-        self.inp = hydra.utils.call(cfg.inpainting, torch_dtype=dtype).to(cfg.device)
-        self.instruct = hydra.utils.call(cfg.instruct, torch_dtype=dtype).to(cfg.device)
+        self.sd = hydra.utils.call(cfg.sd, torch_dtype=dtype, cache_dir=self.cfg.cache_dir).to(cfg.device)
+        self.inp = hydra.utils.call(cfg.inpainting, torch_dtype=dtype, cache_dir=self.cfg.cache_dir).to(cfg.device)
+        self.instruct = hydra.utils.call(cfg.instruct, torch_dtype=dtype, cache_dir=self.cfg.cache_dir).to(cfg.device)
         self.instruct.scheduler = EulerAncestralDiscreteScheduler.from_config(self.instruct.scheduler.config)
         self.zero = hydra.utils.call(cfg.zero, torch_dtype=dtype).to(cfg.device)
         
@@ -48,12 +49,13 @@ class Edit3DFromPromptAnd2DImage():
         if seed:
             self.seed_everything(seed)
         return self.zero(cond, **kwargs).images[0]
+        
     
     def __call__(self, sd_prompt: str = "", 
-                input_image: Optional[torch.Tensor | Image.Image] = None,
+                input_image: Optional[Union[torch.Tensor, Image.Image]] = None,
                 edit_prompt: str = "",
                 inpaint_prompt: str = "",
-                inpaint_mask: Optional[torch.Tensor | Image.Image] = None,
+                inpaint_mask: Optional[Union[torch.Tensor, Image.Image]] = None,
                 save_path: str = "",
                 **kwargs: Any) -> Any:
         if sd_prompt and input_image:

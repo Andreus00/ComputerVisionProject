@@ -162,3 +162,8 @@ cython_debug/
 ckpts
 outputs
 out
+cache
+gaussian-splatting
+out
+saved_outputs
+outputs

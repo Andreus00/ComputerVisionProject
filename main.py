@@ -3,7 +3,17 @@ from omegaconf import DictConfig, OmegaConf
 import torch
 import diffusers
 from src.pipeline.pipe import Edit3DFromPromptAnd2DImage
+import rembg
+import numpy as np
+from PIL import Image
 
+
+def add_background(img):
+    bg = np.array([0,0,0])
+    norm_data = np.array(img) / 255.0
+    arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
+    img = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
+    return img
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def my_app(cfg : DictConfig) -> None:
@@ -11,6 +21,7 @@ def my_app(cfg : DictConfig) -> None:
 
     # Create the model
     model = Edit3DFromPromptAnd2DImage(cfg.models)
+
 
     # Generate an image
     if cfg.misc.load_image_path == "":
@@ -33,11 +44,13 @@ def my_app(cfg : DictConfig) -> None:
 
     # zero123
     edit_image_novel = model.novelViews(edit_image, seed=cfg.misc.seed)
-    edit_image_novel.save(cfg.output.zero_edited)
+    edit_image_novel = rembg.remove(edit_image_novel)
+    add_background(edit_image_novel).save(cfg.output.zero_edited)
 
     # zero123
     image_novel = model.novelViews(image, seed=cfg.misc.seed)
-    image_novel.save(cfg.output.zero)
+    image_novel = rembg.remove(image_novel)
+    add_background(image_novel).save(cfg.output.zero)
 
 
 
