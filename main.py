@@ -2,7 +2,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 import torch
 import diffusers
-from src.pipeline.pipe import Edit2DFromPrompt
+from src.pipeline.pipe import Edit3DFromPromptAnd2DImage
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
@@ -10,7 +10,7 @@ def my_app(cfg : DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
 
     # Create the model
-    model = Edit2DFromPrompt(cfg.models)
+    model = Edit3DFromPromptAnd2DImage(cfg.models)
 
     # Generate an image
     if cfg.misc.load_image_path == "":
