@@ -167,3 +167,5 @@ gaussian-splatting
 out
 saved_outputs
 outputs
+
+.ply

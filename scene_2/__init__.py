@@ -48,14 +48,6 @@ class Scene:
         self.train_cameras = {}
         self.test_cameras = {}
 
-        # if os.path.exists(os.path.join(args.source_path, "sparse")):
-        #     scene_info = sceneLoadTypeCallbacks["Colmap"](args.source_path, args.images, args.eval)
-        # elif os.path.exists(os.path.join(args.source_path, "transforms_train.json")):
-        #     print("Found transforms_train.json file, assuming Blender data set!")
-        #     scene_info = sceneLoadTypeCallbacks["Blender"](args.source_path, args.white_background, args.eval)
-        # else:
-        #     assert False, "Could not recognize scene type!"
-
         #### Create scene info
         
         # we start with random points
@@ -103,12 +95,6 @@ class Scene:
             print("Loading Test Cameras")
             self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, args)
 
-        # if self.loaded_iter:
-        #     self.gaussians.load_ply(os.path.join(self.model_path,
-        #                                                    "point_cloud",
-        #                                                    "iteration_" + str(self.loaded_iter),
-        #                                                    "point_cloud.ply"))
-        # else:
         self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent)
 
     def save(self, iteration):
@@ -203,7 +189,7 @@ def generateCameras(frontal_image: Image.Image, zero_image: Image.Image, fov = 0
 
     for idx in range(len(images)):
 
-        c2w = orbit_camera(elevations[idx], azimuths[idx], radius=4.0, is_degree=True, target=None, opengl=True)
+        c2w = orbit_camera(elevations[idx], azimuths[idx], radius=10.0, is_degree=True, target=None, opengl=True)
 
         c2w[:3, 1:3] *= -1
 
@@ -213,14 +199,6 @@ def generateCameras(frontal_image: Image.Image, zero_image: Image.Image, fov = 0
         T = w2c[:3, 3]
 
         image: Image = images[idx]
-
-        # im_data = np.array(image.convert("RGBA"))
-
-        # bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
-
-        # norm_data = im_data / 255.0
-        # arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] # + bg * (1 - norm_data[:, :, 3:4])
-        # image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
 
         fovy = focal2fov(fov2focal(fovx, image.size[0]), image.size[1])
         FovY = fovy 

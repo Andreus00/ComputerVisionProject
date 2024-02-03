@@ -1,3 +1,3 @@
-_target_: 'diffusers.DiffusionPipeline.from_pretrained'
-pretrained_model_name_or_path: 'ckpts/zero123/'
+_target_: 'zero123.zero123_xl.Zero123Pipeline.from_pretrained'
+pretrained_model_name_or_path: 'bennyguo/zero123-xl-diffusers'
 safety_checker: null

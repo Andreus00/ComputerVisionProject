@@ -5,3 +5,7 @@ hydra-core
 torchvision
 accelerate
 gdown
+einops
+pytorch-lightning
+taming-transformers-rom1504
+kornia
