@@ -195,10 +195,18 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
             tb_writer.add_scalar('total_points', scene.gaussians.get_xyz.shape[0], iteration)
         torch.cuda.empty_cache()
 
+
+class ModelParams3DEdit(ModelParams):
+    def __init__(self, parser):
+        self.frontal_image = ""
+        self.zero_images = ""
+        super().__init__(parser, "Loading Parameters", "Loading Parameters")
+
+
 if __name__ == "__main__":
     # Set up command line argument parser
     parser = ArgumentParser(description="Training script parameters")
-    lp = ModelParams(parser)
+    lp = ModelParams3DEdit(parser)
     op = OptimizationParams(parser)
     pp = PipelineParams(parser)
     parser.add_argument('--ip', type=str, default="127.0.0.1")
