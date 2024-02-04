@@ -9,3 +9,8 @@ einops
 pytorch-lightning
 taming-transformers-rom1504
 kornia
+antlr4-python3-runtime
+trimesh
+PyMCubes
+pymeshlab
+xatlas

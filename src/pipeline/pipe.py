@@ -22,18 +22,28 @@ class Edit3DFromPromptAnd2DImage():
         if dtype is None:
             dtype = torch.float16
         self.sd = hydra.utils.call(cfg.sd, torch_dtype=dtype, cache_dir=self.cfg.cache_dir)
-        self.inp = hydra.utils.call(cfg.inpainting, torch_dtype=dtype, cache_dir=self.cfg.cache_dir)
+        # self.inp = hydra.utils.call(cfg.inpainting, torch_dtype=dtype, cache_dir=self.cfg.cache_dir)
         self.instruct = hydra.utils.call(cfg.instruct, torch_dtype=dtype, cache_dir=self.cfg.cache_dir)
         self.instruct.scheduler = EulerAncestralDiscreteScheduler.from_config(self.instruct.scheduler.config)
         self.zero_plus = hydra.utils.call(cfg.zero_plus, torch_dtype=dtype)
+        self.sd.to(cfg.device)
+        self.instruct.to(cfg.device)
+        self.zero_plus.to(cfg.device)
         self.zero = instantiate_from_config(cfg.zero.model)
         old_state = torch.load("cache/zero123-xl.ckpt", map_location="cpu")["state_dict"]
         self.zero.load_state_dict(old_state)
+
 
     def seed_everything(self, seed):
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
+
+    def remove_background(self, image):
+        image = rembg.remove(image)
+        res = Image.new("RGB", image.size, (0, 0, 0))
+        res.paste(image, mask = image.split()[3])
+        return res
 
     @torch.no_grad()
     def generate(self, prompt, seed=None, kwargs={}):
@@ -53,6 +63,7 @@ class Edit3DFromPromptAnd2DImage():
                              image=image, 
                              **kwargs).images[0]
         self.instruct.to("cpu")
+        res = self.remove_background(res)
         return res
     
     @torch.no_grad()
@@ -77,9 +88,6 @@ class Edit3DFromPromptAnd2DImage():
             self.seed_everything(seed)
         res = self.zero_plus(cond, **kwargs).images[0]
         self.zero_plus.to("cpu")
-        # image_novel = rembg.remove(res)
-        # background = Image.new("RGB", image_novel.size, (0, 0, 0))
-        # background.paste(image_novel, mask = image_novel.split()[3])
         return res
 
     @torch.no_grad()
@@ -94,8 +102,9 @@ class Edit3DFromPromptAnd2DImage():
             right = left     + sub_images_size - 1 
             upper = (i // 2) * sub_images_size
             lower = upper + sub_images_size - 1
-            
-            images.append(zero_plus_out.crop(box = (left, upper, right, lower)))
+            unpacked = zero_plus_out.crop(box = (left, upper, right, lower))
+            unpacked = self.remove_background(unpacked)
+            images.append(unpacked)
 
         return images
     
@@ -156,7 +165,7 @@ class Edit3DFromPromptAnd2DImage():
         azimuths = [-20, 20]
         elevations = [-10, +10]
         novel_views = []
-        for image in zero_plus_images[:2]:
+        for image in zero_plus_images:
             sampler = DDIMSampler(self.zero)
             image = TF.resize(image, (256, 256), interpolation=TF.InterpolationMode.BICUBIC, antialias=True)
             for azimuth in azimuths:
@@ -166,7 +175,8 @@ class Edit3DFromPromptAnd2DImage():
                                          y = azimuth, 
                                          z = 0, 
                                          model = self.zero,
-                                         )
+                                         )[0]
+                new_view = self.remove_background(new_view)
                 novel_views.append(new_view)#, guidance_scale = 0.0, elevation=torch.as_tensor([0]).to(self.cfg.device), azimuth=torch.as_tensor([azimuth]).to(self.cfg.device), distance=torch.as_tensor([3]).to(self.cfg.device), **kwargs).images[0])
             for elevation in elevations:
                 new_view = self.callZero(input_im = image, 
@@ -175,7 +185,8 @@ class Edit3DFromPromptAnd2DImage():
                                          y = 0, 
                                          z = 0, 
                                          model = self.zero,
-                                         )
+                                         )[0]
+                new_view = self.remove_background(new_view)
                 novel_views.append(new_view)
 
         self.zero.to("cpu")
@@ -196,7 +207,10 @@ class Edit3DFromPromptAnd2DImage():
             image = self.generate(sd_prompt, kwargs=kwargs)
             image.save(os.path.join(save_path, "sd.png"))
         elif input_image:
-            image = input_image        
+            image = input_image
+            if isinstance(image, torch.Tensor):
+                image = TF.to_pil_image(image)
+            image = image.resize((256, 256), Image.Resampling.BICUBIC)      
         if edit_prompt:
             edit_kwargs = {}
             if "edit_kwargs" in kwargs:
@@ -210,14 +224,15 @@ class Edit3DFromPromptAnd2DImage():
             image.save(os.path.join(save_path, "inpaint.png"))
         
         novel_views = self.novelViewsZeroPlus(image, kwargs=kwargs)
-        novel_views.save(os.path.join(save_path, "novel_views.png"))
+        novel_views.save(os.path.join(save_path, "zero_novel_views.png"))
 
         novel_views = self.unpack_zero_plus_out(novel_views)
+        for i, image in enumerate(novel_views):
+            image.save(os.path.join(save_path, f"novel_zero_plus_view_{i}.png"))
 
         novel_views = self.novelViewsZero(novel_views, kwargs=kwargs)
-        for i, images in enumerate(novel_views):
-            for j, image in enumerate(images):
-                image.save(os.path.join(save_path, f"novel_view_{i}_{j}.png"))
+        for i, image in enumerate(novel_views):
+            image.save(os.path.join(save_path, f"novel_view_{i}.png"))
         return novel_views
     
 

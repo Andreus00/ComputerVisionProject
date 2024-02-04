@@ -15,13 +15,14 @@ import json
 import sys
 import torch
 import math
+import hydra
 sys.path.append("./gaussian-splatting/")
 from utils.system_utils import searchForMaxIteration
 from scene_2.dataset_readers import sceneLoadTypeCallbacks
 from scene_2.gaussian_model import GaussianModel
 from arguments import ModelParams
 from .dataset_readers import SceneInfo, getNerfppNorm, storePly, CameraInfo, focal2fov, fov2focal
-from utils.camera_utils import cameraList_from_camInfos, camera_to_JSON
+from .camera_utils import cameraList_from_camInfos, camera_to_JSON
 from utils.sh_utils import SH2RGB
 import numpy as np
 from PIL import Image
@@ -39,10 +40,17 @@ class Scene:
         src_path = args.source_path
         ply_path = os.path.join(src_path, "point_cloud.ply")
         self.model_path = "./out"
+        self.images_path = self.model_path
 
-        frontal_image = Image.open(args.frontal_image)
-        zero_images = Image.open(args.zero_images)
+        images = [f for f in os.listdir(self.images_path) if os.path.isfile(os.path.join(self.images_path, f))]
+        frontal_image = [f for f in images if f.startswith("edit")][0]
+        novels = [f for f in images if f.startswith("novel")]
+        zero_plus_images = [f for f in novels if f.startswith("novel_zero_plus")]
+        zero_images = [f for f in novels if f.startswith("novel_view")]
+        del images
 
+        train_cam_info = generateCameras(frontal_image, zero_plus_images, zero_images, self.images_path)
+        
         self.gaussians = gaussians
 
         self.train_cameras = {}
@@ -61,7 +69,6 @@ class Scene:
 
         storePly(ply_path, xyz, SH2RGB(shs) * 255)
         
-        train_cam_info = generateCameras(frontal_image, zero_images)
 
         scene_info = SceneInfo(point_cloud=pcd,
                         train_cameras=train_cam_info,
@@ -143,6 +150,13 @@ def look_at(campos, target, opengl=True):
     R = np.stack([right_vector, up_vector, forward_vector], axis=1)
     return R
 
+def open_image(image_path: str):
+    '''
+    Open an image, convert it to RGB and resize it to 256x256
+    '''
+    image = Image.open(image_path).convert('RGB')
+    image = image.resize((256, 256), Image.Resampling.BICUBIC)
+    return image
 
 # elevation & azimuth to pose (cam2world) matrix
 def orbit_camera(elevation, azimuth, radius=1, is_degree=True, target=None, opengl=True):
@@ -164,28 +178,50 @@ def orbit_camera(elevation, azimuth, radius=1, is_degree=True, target=None, open
     T[:3, 3] = campos
     return T
 
+def rearrange_azimuth_elevation_images(azimuths, elevations, images):
+    '''
+    Rearrange azimuths and elevations to make them consistent with the order of the images
+    '''
+    rearranged_azimuths = [azimuths[0]]
+    rearranged_elevations = [elevations[0]]
+    rearranged_images = [images[0]]
+    for i in range(6):
+        rearranged_azimuths.append(azimuths[1 + i])
+        rearranged_elevations.append(elevations[1 + i])
+        rearranged_images.append(images[1 + i])
+        rearranged_azimuths.append(azimuths[1 + i + (6 - i) + 4 * i + 0] + azimuths[1 + i])
+        rearranged_elevations.append(elevations[1 + i + (6 - i) + 4 * i + 0] + elevations[1 + i])
+        rearranged_images.append(images[1 + i + (6 - i) + 4 * i + 0])
+        rearranged_azimuths.append(azimuths[1 + i + (6 - i) + 4 * i + 1] + azimuths[1 + i])
+        rearranged_elevations.append(elevations[1 + i + (6 - i) + 4 * i + 1] + elevations[1 + i])
+        rearranged_images.append(images[1 + i + (6 - i) + 4 * i + 1])
+        rearranged_azimuths.append(azimuths[1 + i + (6 - i) + 4 * i + 2] + azimuths[1 + i])
+        rearranged_elevations.append(elevations[1 + i + (6 - i) + 4 * i + 2] + elevations[1 + i])
+        rearranged_images.append(images[1 + i + (6 - i) + 4 * i + 2])
+        rearranged_azimuths.append(azimuths[1 + i + (6 - i) + 4 * i + 3] + azimuths[1 + i])
+        rearranged_elevations.append(elevations[1 + i + (6 - i) + 4 * i + 3] + elevations[1 + i])
+        rearranged_images.append(images[1 + i + (6 - i) + 4 * i + 3])
+        
+    return rearranged_azimuths, rearranged_elevations, rearranged_images
 
-def generateCameras(frontal_image: Image.Image, zero_image: Image.Image, fov = 0.6911112070083618):
+def generateCameras(frontal_image: str, zero_plus_images: List[str], zero_images: List[str], images_path: str, fov = 0.6911112070083618):
     '''
     Generate cameras from the output of Zero-123
     '''
-    images = [frontal_image]
-    sub_images_width = 320
-    # split the zero image into 6 images. The images are in a 2x3 grid
-    for i in range(6):
-        left  = (i % 2)  * sub_images_width
-        right = left     + sub_images_width - 1 
-        upper = (i // 2) * sub_images_width
-        lower = upper + sub_images_width - 1
-        
-        images.append(zero_image.crop(box = (left, upper, right, lower)))
+    if len(zero_plus_images) * 4 != len(zero_images):
+        raise ValueError(f"The number of zero_plus_images x 4 and zero_images must be the same. Got {len(zero_plus_images)} and {len(zero_images)}")
+    zero_plus_images.sort()
+    zero_images.sort(key=lambda x: int(x.split("_")[-1].split(".")[0]))
+    images = [frontal_image] + zero_plus_images + zero_images
 
     cam_infos = []
 
     fovx = fov
 
-    azimuths = [0] + np.linspace(30, 330, 6, endpoint=False).tolist()
-    elevations = [0, -30, +20, -30, +20, -30, +20, -30]
+    azimuths = [0] + np.linspace(30, 330, 6, endpoint=False).tolist() + [-20, 20, 0, 0] * 6
+    elevations = [0, -30, +20, -30, +20, -30, +20, -30] + [0, 0, -10, +10] * 6
+
+    azimuths, elevations, images = rearrange_azimuth_elevation_images(azimuths, elevations, images)
 
     for idx in range(len(images)):
 
@@ -198,7 +234,7 @@ def generateCameras(frontal_image: Image.Image, zero_image: Image.Image, fov = 0
         R = np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
         T = w2c[:3, 3]
 
-        image: Image = images[idx]
+        image: Image = open_image(os.path.join(images_path, images[idx]))
 
         fovy = focal2fov(fov2focal(fovx, image.size[0]), image.size[1])
         FovY = fovy 

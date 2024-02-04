@@ -7,7 +7,7 @@ core:
   device: cuda
 
 misc:
-  load_image_path: "data/house.jpeg"
+  load_image_path: "data/statue.jpg"
   prompt: 'A statue of a man with a sword behind'
   edit: 'make it look like a cactus'
   seed: 41
