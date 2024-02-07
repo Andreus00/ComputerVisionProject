@@ -1118,7 +1118,7 @@ def save_mesh(gsNetwork, gsRender, opacity_threshold,density_threshold,  resolut
 
     render_resolution = 512
 
-    import nvdiffrast.torch as dr
+    import nvdiffrast.nvdiffrast.torch as dr
 
     force_cuda_rast = True
     if not force_cuda_rast:

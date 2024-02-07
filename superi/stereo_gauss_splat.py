@@ -117,7 +117,7 @@ class GsNetwork(torch.nn.Module):  #torch.nn.Module and super().__init__() just 
     def __init__(self, device, point_number, percent_dense=0.01, max_sh_degree=3):
         super().__init__()
         self.percent_dense = percent_dense
-        self.max_sh_degree, self.now_sh_degree = max_sh_degree, 0  #spherical-harmonics
+        self.max_sh_degree, self.active_sh_degree = max_sh_degree, 0  #spherical-harmonics
 
         points = (torch.rand(point_number, 3).float().to(device) - 0.5) * 1.0
         features = torch.cat((torch.rand(point_number, 3, 1).float().to(device) / 5.0 + 0.4, torch.zeros((point_number, 3, (self.max_sh_degree + 1) ** 2 -1)).float().to(device)), dim=-1)
@@ -188,8 +188,8 @@ class GsNetwork(torch.nn.Module):  #torch.nn.Module and super().__init__() just 
         self.denom = torch.zeros((self.get_xyz.shape[0], 1), device=device)
 
     def oneupSHdegree(self):
-        if self.now_sh_degree < self.max_sh_degree:
-            self.now_sh_degree += 1
+        if self.active_sh_degree < self.max_sh_degree:
+            self.active_sh_degree += 1
 
     def add_densification_stats(self, viewspace_point_tensor, update_filter):
         self.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
@@ -366,7 +366,7 @@ from gauss_rasterize.gauss_rasterize import GaussRasterizerSetting, GaussRasteri
 class GsRender:
     def render(self, viewpoint_camera, pc, bg_color, device, scale_modifier=1.0, is_train=True):
         screenspace_points = torch.zeros_like(pc.get_xyz, dtype=pc.get_xyz.dtype, requires_grad=is_train, device=device)
-        rasterizer = GaussRasterizer(setting=GaussRasterizerSetting(image_height=int(viewpoint_camera.image_height), image_width=int(viewpoint_camera.image_width), tanfovx=math.tan(viewpoint_camera.FovX * 0.5), tanfovy=math.tan(viewpoint_camera.FovY * 0.5), scale_modifier=scale_modifier, sh_degree=pc.now_sh_degree, prefiltered=False, viewmatrix=viewpoint_camera.world_view_transform, projmatrix=viewpoint_camera.full_proj_transform, campos=viewpoint_camera.camera_center, bg=bg_color))
+        rasterizer = GaussRasterizer(setting=GaussRasterizerSetting(image_height=int(viewpoint_camera.image_height), image_width=int(viewpoint_camera.image_width), tanfovx=math.tan(viewpoint_camera.FovX * 0.5), tanfovy=math.tan(viewpoint_camera.FovY * 0.5), scale_modifier=scale_modifier, sh_degree=pc.active_sh_degree, prefiltered=False, viewmatrix=viewpoint_camera.world_view_transform, projmatrix=viewpoint_camera.full_proj_transform, campos=viewpoint_camera.camera_center, bg=bg_color))
         rendered_image, radii = rasterizer(means3D=pc.get_xyz, means2D=screenspace_points, opacities=pc.get_opacity, shs=pc.get_features, scales=pc.get_scaling, rotations=pc.get_rotation)
         return rendered_image, screenspace_points, radii
 
@@ -497,8 +497,8 @@ def mesh(gsNetwork, opacity_threshold, density_threshold):
 
 def main(checkpoint='./outs/ckpt/checkpoint.pth', device=['cpu','cuda'][torch.cuda.is_available()]):
     gsNetwork = GaussianModel(3)
-    gsNetwork.load_ply("../out/point_cloud/iteration_30000/point_cloud.ply")
-    mesh(gsNetwork, opacity_threshold=0.001, density_threshold=0.333)
+    gsNetwork.load_ply("../out/point_cloud/iteration_4000/point_cloud.ply")
+    mesh(gsNetwork, opacity_threshold=0.02, density_threshold=0.01)
 
 if __name__ == '__main__':  # python -Bu stereo_gauss_splat.py
     main()

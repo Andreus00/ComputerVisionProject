@@ -59,7 +59,7 @@ class Scene:
         #### Create scene info
         
         # we start with random points
-        num_pts = 100_000
+        num_pts = 300_000
         print(f"Generating random point cloud ({num_pts})...")
         
         # We create random points inside the bounds of the synthetic Blender scenes
