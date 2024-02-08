@@ -14,3 +14,8 @@ trimesh
 PyMCubes
 pymeshlab
 xatlas
+scikit-learn
+pydantic==1.10.7
+gradio==3.34.0
+requests
+pip install -e CLIP/ # first git clone https://github.com/openai/CLIP.git

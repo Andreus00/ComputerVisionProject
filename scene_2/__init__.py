@@ -33,13 +33,13 @@ class Scene:
 
     gaussians : GaussianModel
 
-    def __init__(self, args : ModelParams, gaussians : GaussianModel, load_iteration=None, shuffle=True, resolution_scales=[1.0]):
+    def __init__(self, args : ModelParams, gaussians : GaussianModel, model_path="./out", load_iteration=None, shuffle=True, resolution_scales=[1.0]):
         """b
         Edit this class to use zero123 images instead of Colmap images
         """
         src_path = args.source_path
         ply_path = os.path.join(src_path, "point_cloud.ply")
-        self.model_path = "./out"
+        self.model_path = model_path
         self.images_path = self.model_path
 
         images = [f for f in os.listdir(self.images_path) if os.path.isfile(os.path.join(self.images_path, f))]

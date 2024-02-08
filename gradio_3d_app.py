@@ -72,53 +72,40 @@ def save_imgs(edited_img, zero_plus_img, zero_gallery, save_name):
         img = Image.open(BytesIO(response.content))
         img.save(f"images/{save_name}/novel_view_{i}.png")
 
+def load_imgs(save_name):
+    save_name = save_name.replace(" ", "_").replace(".", "").replace("/", "")
+    if not os.path.exists(f"images/{save_name}"):
+        raise ValueError(f"Image {save_name} does not exist")
+    edited_img = Image.open(f"images/{save_name}/edit.png")
+    zero_plus_img = []
+    for i in range(6):
+        zero_plus_img.append(Image.open(f"images/{save_name}/novel_zero_plus_view_{i}.png"))
+    zero_gallery = []
+    for i in range(6 * 4):
+        zero_gallery.append(Image.open(f"images/{save_name}/novel_view_{i}.png"))
+    
+    return edited_img, zero_plus_img, zero_gallery
+
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def start_gradio(conf: DictConfig) -> None:
     global cfg, model
     cfg = conf
-    model = Edit3DFromPromptAnd2DImage(cfg.models)
     with gr.Blocks() as demo:
 
-        # Stable Diffusion
-            
-        name = gr.Textbox(label="Stable Diffusion Prompt")
-        output_sd = gr.Image(label="Generated Image", source="upload")
-        greet_btn = gr.Button("generate SD image")
-        greet_btn.click(fn=generate_sd, inputs=name, outputs=output_sd, api_name="generate_sd")
+        # Load images
+        name = gr.Textbox(label="Saved image name")
+        frontal_img = gr.Image(label="Frontal Image", source="upload")
+        zero_plus_side_imgs = gr.Gallery(label="Zero Plus Side Image")
+        zero_plus_side_imgs.style(grid=6)
+        zero_side_imgs = gr.Gallery(label="Zero Side Image")
+        zero_side_imgs.style(columns=4, rows=6)
+        greet_btn = gr.Button("load")
+        greet_btn.click(fn=load_imgs, inputs=name, outputs=[frontal_img, zero_plus_side_imgs, zero_side_imgs], api_name="load_images")
 
-        # Upload
-        uploaded = gr.Image(label="Uploaded Image", source="upload")
-        upload_btn = gr.UploadButton("Upload Image")
-
-
-        # Edit
-        guidance_scale = gr.Slider(minimum=0, maximum=20, value=5.5, label="Guidance Scale")
-        image_guidance_scale = gr.Slider(minimum=0, maximum=20, value=1.5, label="Image Guidance Scale")
-        edit_prompt = gr.Textbox(label="Edit Prompt", value="make it made of gold")
-        edit_btn = gr.Button("Edit Image")
-        edited_img = gr.Image(label="Edited Image", source="upload")
-        edit_btn.click(fn=edit_image, 
-                        inputs=[uploaded, output_sd, edit_prompt, guidance_scale, image_guidance_scale],
-                        outputs=edited_img, 
-                        api_name="edit_image")
-
-        # Zero Plus
-        zero_plus_btn = gr.Button("Zero Plus")
-        zero_plus_img = gr.Gallery(label="Zero Plus Images")
-        zero_plus_img.style(grid=6)
-        zero_plus_btn.click(fn=zerp_plus, inputs=edited_img, outputs=zero_plus_img, api_name="zero_plus")
-
-        # Zero
-        zero_btn = gr.Button("Zero")
-        zero_gallery = gr.Gallery(label="Zero Images")
-        zero_gallery.style(columns=4, rows=6)
-        zero_btn.click(fn=zero, inputs=zero_plus_img, outputs=zero_gallery, api_name="zero")
-
-        # save images
-        save_name = gr.Textbox(label="Save Name")
-        save_btn = gr.Button("Save Image")
-        save_btn.click(fn=save_imgs, inputs=[edited_img, zero_plus_img, zero_gallery, save_name], api_name="save")
-
+        # Start Gaussian Splatting
+        start_btn = gr.Button("Start Gaussian Splatting")
+        gaussian_splatting_gallery = gr.Gallery(label="Gaussian Splatting")
+        start_btn.click(fn=generate_gs, inputs=[frontal_img, zero_plus_side_imgs, zero_side_imgs], outputs=frontal_img, api_name="start_gaussian_splatting")
 
     demo.launch()
 
