@@ -497,8 +497,8 @@ def mesh(gsNetwork, opacity_threshold, density_threshold):
 
 def main(checkpoint='./outs/ckpt/checkpoint.pth', device=['cpu','cuda'][torch.cuda.is_available()]):
     gsNetwork = GaussianModel(3)
-    gsNetwork.load_ply("../out/point_cloud/iteration_4000/point_cloud.ply")
-    mesh(gsNetwork, opacity_threshold=0.02, density_threshold=0.01)
+    gsNetwork.load_ply("../images/cactus_statue/point_cloud/iteration_4000/point_cloud.ply")
+    mesh(gsNetwork, opacity_threshold=0.08, density_threshold=0.05)
 
 if __name__ == '__main__':  # python -Bu stereo_gauss_splat.py
     main()

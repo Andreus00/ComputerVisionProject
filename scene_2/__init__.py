@@ -62,11 +62,11 @@ class Scene:
         #### Create scene info
         
         # we start with random points
-        num_pts = 300_000
+        num_pts = 5_000
         print(f"Generating random point cloud ({num_pts})...")
         
         # We create random points inside the bounds of the synthetic Blender scenes
-        xyz = np.random.random((num_pts, 3)) * 2.6 - 1.3
+        xyz = np.random.random((num_pts, 3)) - 0.5
         shs = np.random.random((num_pts, 3)) / 255.0
         pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))
 
@@ -93,9 +93,9 @@ class Scene:
         with open(os.path.join(src_path, "cameras.json"), 'w') as file:
             json.dump(json_cams, file)
 
-        if shuffle:
-            random.shuffle(scene_info.train_cameras)  # Multi-res consistent random shuffling
-            random.shuffle(scene_info.test_cameras)  # Multi-res consistent random shuffling
+        # if shuffle:
+        #     random.shuffle(scene_info.train_cameras)  # Multi-res consistent random shuffling
+        #     random.shuffle(scene_info.test_cameras)  # Multi-res consistent random shuffling
 
         self.cameras_extent = scene_info.nerf_normalization["radius"]
 
@@ -163,7 +163,7 @@ def open_image(image_path: str):
     Open an image, convert it to RGB and resize it to 256x256
     '''
     image = Image.open(image_path).convert('RGB')
-    image = image.resize((256, 256), Image.Resampling.BICUBIC)
+    image = image.resize((512, 512), Image.Resampling.BICUBIC)
     return image
 
 # elevation & azimuth to pose (cam2world) matrix
@@ -209,6 +209,15 @@ def rearrange_azimuth_elevation_images(azimuths, elevations, images):
         rearranged_azimuths.append(azimuths[1 + i + (6 - i) + 4 * i + 3] + azimuths[1 + i])
         rearranged_elevations.append(elevations[1 + i + (6 - i) + 4 * i + 3] + elevations[1 + i])
         rearranged_images.append(images[1 + i + (6 - i) + 4 * i + 3])
+
+
+    # for i in range(6):
+    #     rearranged_azimuths.append(azimuths[1 + i])
+    #     rearranged_elevations.append(elevations[1 + i])
+    #     rearranged_images.append(images[1 + i])
+    #     rearranged_azimuths.append(azimuths[1 + i + (6 - i) + 4 * i + 0] + azimuths[1 + i])
+    #     rearranged_elevations.append(elevations[1 + i + (6 - i) + 4 * i + 0] + elevations[1 + i])
+    #     rearranged_images.append(images[1 + i + (6 - i) + 4 * i + 0])
         
     return rearranged_azimuths, rearranged_elevations, rearranged_images
 
@@ -216,20 +225,24 @@ def generateTrainingCameras(frontal_image: str, zero_plus_images: List[str], zer
     '''
     Generate cameras from the output of Zero-123
     '''
-    if len(zero_plus_images) * 4 != len(zero_images):
-        raise ValueError(f"The number of zero_plus_images x 4 and zero_images must be the same. Got {len(zero_plus_images)} and {len(zero_images)}")
+    # if len(zero_plus_images) != len(zero_images):
+    # if len(zero_plus_images) * 4 != len(zero_images):
+    #     raise ValueError(f"The number of zero_plus_images x 4 and zero_images must be the same. Got {len(zero_plus_images)} and {len(zero_images)}")
     zero_plus_images.sort()
     zero_images.sort(key=lambda x: int(x.split("_")[-1].split(".")[0]))
-    images = [frontal_image] + zero_plus_images + zero_images
+    images = [frontal_image] + zero_plus_images # + [None] * len(zero_images)
 
     cam_infos = []
 
     fovx = fov
 
+    # azimuths = [0] + np.linspace(30, 330, 6, endpoint=False).tolist() + np.linspace(30, 330, 6, endpoint=False).tolist() # [-20, 20, 0, 0] * 6
+    # elevations = [0, -30, +20, -30, +20, -30, +20] + [0, 0, 0, 0, 0, 0]
+    
     azimuths = [0] + np.linspace(30, 330, 6, endpoint=False).tolist() + [-20, 20, 0, 0] * 6
-    elevations = [0, -30, +20, -30, +20, -30, +20, -30] + [0, 0, -10, +10] * 6
+    elevations = [0, -30, +20, -30, +20, -30, +20] + [0, 0, -10, +10] * 6
+    # azimuths, elevations, images = rearrange_azimuth_elevation_images(azimuths, elevations, images)
 
-    azimuths, elevations, images = rearrange_azimuth_elevation_images(azimuths, elevations, images)
 
     for idx in range(len(images)):
 
@@ -241,15 +254,22 @@ def generateTrainingCameras(frontal_image: str, zero_plus_images: List[str], zer
 
         R = np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
         T = w2c[:3, 3]
+        if images[idx] is not None:
+            image: Image = open_image(os.path.join(images_path, images[idx]))
+            width = image.size[1]
+            height = image.size[0]
+        else:
+            image = Image.fromarray(np.zeros((512, 512, 3), dtype=np.uint8))
+            width = 512
+            height = 512
 
-        image: Image = open_image(os.path.join(images_path, images[idx]))
-
-        fovy = focal2fov(fov2focal(fovx, image.size[0]), image.size[1])
+        fovy = focal2fov(fov2focal(fovx, height), width)
         FovY = fovy 
         FovX = fovx
 
-        cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                        image_path=None, image_name=f"image-{idx}", width=image.size[0], height=image.size[1]))
+        camm = CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
+                        image_path=None, image_name=f"image-{idx}", width=width, height=height)
+        cam_infos.append(camm)
 
     return cam_infos
 
@@ -257,12 +277,12 @@ def generateGifCameras(fov = 0.6911112070083618):
     '''
     Generate cameras from the output of Zero-123
     '''
-    img_size = 256
+    img_size = 512
     cam_infos = []
     fovx = fov
 
     azimuths = np.linspace(0, 360, 30, endpoint=False).tolist() * 3
-    elevations = (np.sin(np.linspace(0, 2 * np.pi, 30, endpoint=False)) * 30).tolist() * 3
+    elevations = [0] * 30 * 3 # (np.sin(np.linspace(0, 2 * np.pi, 30, endpoint=False)) * 30).tolist() * 3
 
     for idx in range(len(azimuths)):
 
@@ -275,7 +295,7 @@ def generateGifCameras(fov = 0.6911112070083618):
         R = np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
         T = w2c[:3, 3]
 
-        fovy = focal2fov(fov2focal(fovx, 256), 256)
+        fovy = focal2fov(fov2focal(fovx, 512), 512)
         FovY = fovy 
         FovX = fovx
 
@@ -291,6 +311,7 @@ def generateCameras(frontal_image: str, zero_plus_images: List[str], zero_images
     trainig_cameras = generateTrainingCameras(frontal_image, zero_plus_images, zero_images, images_path, fov)
     gif_cameras = generateGifCameras(fov)
     return trainig_cameras, gif_cameras
+
 
 
 '''

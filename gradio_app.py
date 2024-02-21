@@ -20,7 +20,7 @@ model = None
 
 def generate_sd(prompt: str):
     global cfg, model
-    return model.generate(prompt).resize((256, 256), Image.Resampling.BICUBIC)
+    return model.generate(prompt).resize((512, 512), Image.Resampling.BICUBIC)
     
 
 def edit_image(image_upl, image_sd, prompt, guidance_scale, image_guidance_scale):
@@ -34,44 +34,46 @@ def edit_image(image_upl, image_sd, prompt, guidance_scale, image_guidance_scale
         raise ValueError("No image provided")
     
     print(f"Image: {image}")
+    # rescale image
+    image = image.resize((512, 512), Image.Resampling.BICUBIC)
     kwargs = {
         "guidance_scale": guidance_scale,
         "image_guidance_scale": image_guidance_scale,
     }
-    return model.edit(prompt, image, kwargs=kwargs).resize((256, 256), Image.Resampling.BICUBIC)
+    return model.edit(prompt, image, kwargs=kwargs).resize((512, 512), Image.Resampling.BICUBIC)
 
 
 def zerp_plus(image):
-    image = Image.fromarray(image).resize((256, 256), Image.Resampling.BICUBIC)
+    image = Image.fromarray(image).resize((512, 512), Image.Resampling.BICUBIC)
     novel_views = model.novelViewsZeroPlus(image)
     novel_unpacked = model.unpack_zero_plus_out(novel_views)
     return novel_unpacked
 
-def zero(images):
-    print(f"Images: {images}")
-    imgs = []
-    for img_metadata in images:
-        response = requests.get(img_metadata["data"])
-        img = Image.open(BytesIO(response.content))
-        imgs.append(img)
-    novel_views = model.novelViewsZero(imgs)
-    return novel_views
+# def zero(images):
+#     print(f"Images: {images}")
+#     imgs = []
+#     for img_metadata in images:
+#         response = requests.get(img_metadata["data"])
+#         img = Image.open(BytesIO(response.content))
+#         imgs.append(img)
+#     novel_views = model.novelViewsZero(imgs)
+#     return novel_views
 
 
-def save_imgs(edited_img, zero_plus_img, zero_gallery, save_name):
+def save_imgs(edited_img, zero_plus_img, save_name):
     save_name = save_name.replace(" ", "_").replace(".", "").replace("/", "")
     if not os.path.exists(f"images/{save_name}"):
         os.makedirs(f"images/{save_name}")
-    edited_img = Image.fromarray(edited_img).resize((256, 256), Image.Resampling.BICUBIC)
+    edited_img = Image.fromarray(edited_img).resize((512, 512), Image.Resampling.BICUBIC)
     edited_img.save(f"images/{save_name}/edit.png")
     for i, img_metadata in enumerate(zero_plus_img):
         response = requests.get(img_metadata["data"])
         img = Image.open(BytesIO(response.content))
         img.save(f"images/{save_name}/novel_zero_plus_view_{i}.png")
-    for i, img_metadata in enumerate(zero_gallery):
-        response = requests.get(img_metadata["data"])
-        img = Image.open(BytesIO(response.content))
-        img.save(f"images/{save_name}/novel_view_{i}.png")
+    # for i, img_metadata in enumerate(zero_gallery):
+    #     response = requests.get(img_metadata["data"])
+    #     img = Image.open(BytesIO(response.content))
+    #     img.save(f"images/{save_name}/novel_view_{i}.png")
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def start_gradio(conf: DictConfig) -> None:
@@ -109,16 +111,16 @@ def start_gradio(conf: DictConfig) -> None:
         zero_plus_img.style(grid=6)
         zero_plus_btn.click(fn=zerp_plus, inputs=edited_img, outputs=zero_plus_img, api_name="zero_plus")
 
-        # Zero
-        zero_btn = gr.Button("Zero")
-        zero_gallery = gr.Gallery(label="Zero Images")
-        zero_gallery.style(columns=4, rows=6)
-        zero_btn.click(fn=zero, inputs=zero_plus_img, outputs=zero_gallery, api_name="zero")
+        # # Zero
+        # zero_btn = gr.Button("Zero")
+        # zero_gallery = gr.Gallery(label="Zero Images")
+        # zero_gallery.style(columns=4, rows=6)
+        # zero_btn.click(fn=zero, inputs=zero_plus_img, outputs=zero_gallery, api_name="zero")
 
         # save images
         save_name = gr.Textbox(label="Save Name")
         save_btn = gr.Button("Save Image")
-        save_btn.click(fn=save_imgs, inputs=[edited_img, zero_plus_img, zero_gallery, save_name], api_name="save")
+        save_btn.click(fn=save_imgs, inputs=[edited_img, zero_plus_img, save_name], api_name="save")
 
 
     demo.launch()

@@ -7,7 +7,7 @@ import os
 import sys
 sys.path.append("src/zero123/")
 
-from train import main
+from train_2 import main
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +23,10 @@ def load_from_path(save_name):
     for i in range(6):
         zero_plus_img.append(Image.open(f"images/{save_name}/novel_zero_plus_view_{i}.png"))
     zero_gallery = []
-    for i in range(6 * 4):
-        zero_gallery.append(Image.open(f"images/{save_name}/novel_view_{i}.png"))
+    # for i in range(6 * 4):
+    #     zero_gallery.append(Image.open(f"images/{save_name}/novel_view_{i}.png"))
     
-    return edited_img, zero_plus_img, zero_gallery
+    return edited_img, zero_plus_img
     
 
 def load_imgs(save_name):
@@ -35,11 +35,7 @@ def load_imgs(save_name):
 def generate_gs(path):
     main(os.path.join(base_path, path))
 
-    return f"images/{path}/gifs/1000.gif", \
-            f"images/{path}/gifs/2000.gif", \
-            f"images/{path}/gifs/4000.gif", \
-            f"images/{path}/gifs/7000.gif", \
-            f"images/{path}/gifs/10000.gif"
+    return f"images/{path}/gifs/1000.gif", f"images/{path}/gifs/500.gif", f"images/{path}/gifs/300.gif"
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def start_gradio(conf: DictConfig) -> None:
@@ -52,15 +48,15 @@ def start_gradio(conf: DictConfig) -> None:
         frontal_img = gr.Image(label="Frontal Image", source="upload")
         zero_plus_side_imgs = gr.Gallery(label="Zero Plus Side Image")
         zero_plus_side_imgs.style(grid=6)
-        zero_side_imgs = gr.Gallery(label="Zero Side Image")
-        zero_side_imgs.style(columns=4, rows=6)
+        # zero_side_imgs = gr.Gallery(label="Zero Side Image")
+        # zero_side_imgs.style(columns=4, rows=6)
         greet_btn = gr.Button("load")
-        greet_btn.click(fn=load_imgs, inputs=name, outputs=[frontal_img, zero_plus_side_imgs, zero_side_imgs], api_name="load_images")
+        greet_btn.click(fn=load_imgs, inputs=name, outputs=[frontal_img, zero_plus_side_imgs], api_name="load_images")
 
         # Start Gaussian Splatting
         start_btn = gr.Button("Start Gaussian Splatting")
-        gaussian_splatting_gallery = gr.Gallery(label="Gaussian Splatting")
-        gaussian_splatting_gallery.style(columns=5)
+        gaussian_splatting_gallery = gr.Gallery(label="Gaussian Splatting Result")
+        gaussian_splatting_gallery.style(grid=3)
         start_btn.click(fn=generate_gs, 
                         inputs=[name], 
                         outputs=gaussian_splatting_gallery, 

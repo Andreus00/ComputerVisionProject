@@ -29,9 +29,9 @@ class Edit3DFromPromptAnd2DImage():
         self.sd.to(cfg.device)
         self.instruct.to(cfg.device)
         self.zero_plus.to(cfg.device)
-        self.zero = instantiate_from_config(cfg.zero.model)
-        old_state = torch.load("cache/zero123-xl.ckpt", map_location="cpu")["state_dict"]
-        self.zero.load_state_dict(old_state)
+        # self.zero = instantiate_from_config(cfg.zero.model)
+        # old_state = torch.load("cache/zero123-xl.ckpt", map_location="cpu")["state_dict"]
+        # self.zero.load_state_dict(old_state)
 
 
     def seed_everything(self, seed):
@@ -161,6 +161,21 @@ class Edit3DFromPromptAnd2DImage():
         self.zero.to(self.cfg.device)
         if seed:
             self.seed_everything(seed)
+        
+        # azimuths = [0, 0, 0, 0, 0, 0]
+        # elevations = [+30, -20, +30, -20, +30, -20]
+        # novel_views = []
+        # for idx, image in enumerate(zero_plus_images):
+        #     sampler = DDIMSampler(self.zero)
+        #     image = TF.resize(image, (256, 256), interpolation=TF.InterpolationMode.BICUBIC, antialias=True)
+        #     new_view = self.callZero(input_im = image, 
+        #                                 sampler = sampler, 
+        #                                 x = elevations[idx], 
+        #                                 y = 0, 
+        #                                 z = 0, 
+        #                                 model = self.zero,
+        #                                 )[0]
+        #     new_view = self.remove_background(new_view)
         
         azimuths = [-20, 20]
         elevations = [-10, +10]
