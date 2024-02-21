@@ -27,13 +27,16 @@ from tqdm import tqdm
 from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
+import imageio
+from PIL import Image
+
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
 except ImportError:
     TENSORBOARD_FOUND = False
 
-def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, path):
+def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, path="./out"):
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree)
@@ -114,6 +117,22 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
 
+                # Generate a gif
+                gif_cameras = scene.getGifCameras().copy()
+                renders = []
+                print(f"Rendering gif for iteration {iteration}", "Cameras:", len(gif_cameras))
+                for cam in gif_cameras:
+                    render_pkg = render(cam, gaussians, pipe, bg)
+                    renders.append(render_pkg["render"])
+
+                if not os.path.exists(os.path.join(scene.model_path, "gifs")):
+                    os.makedirs(os.path.join(scene.model_path, "gifs"))
+
+                with imageio.get_writer(os.path.join(scene.model_path, "gifs", f"{iteration}.gif"), mode='I') as writer:
+                    for img in renders:
+                        img = img.cpu().numpy().transpose(1, 2, 0)
+                        writer.append_data((img * 255).astype('uint8'))
+
             # Densification
             if iteration < opt.densify_until_iter:
                 # Keep track of max radii in image-space for pruning
@@ -135,6 +154,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if (iteration in checkpoint_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
+
 
 def prepare_output_and_logger(args):    
     if not args.model_path:
@@ -234,21 +254,20 @@ def main(path):
     parser = ArgumentParser(description="Training script parameters")
     lp = ModelParams(parser)
     op = OptimizationParams(parser)
-    op.iterations = 10_000
     pp = PipelineParams(parser)
     parser.add_argument('--ip', type=str, default="127.0.0.1")
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_000, 2_000, 4_000, 7_000, 30_000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[1_000, 2_000, 4_000,  7_000, 30_000])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[1_000, 2_000, 4_000, 7_000, 10_000])#, 30_000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[1_000, 2_000, 4_000,  7_000, 10_000])#, 30_000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     args = parser.parse_args(sys.argv[1:])
 
     args.save_iterations.append(args.iterations)
-    
+
     print("Optimizing " + args.model_path)
 
     # Initialize system state (RNG)

@@ -1,81 +1,23 @@
 import gradio as gr
 import hydra
-from omegaconf import DictConfig, OmegaConf
-from src.pipeline.pipe import Edit3DFromPromptAnd2DImage
+from omegaconf import DictConfig
 from PIL import Image
 import logging
-import requests
-from io import BytesIO
 import os
 import sys
 sys.path.append("src/zero123/")
 
+from train import main
+
 logger = logging.getLogger(__name__)
 
 cfg = None
-model = None
-# first_image = None
-# output_sd = None
-# uploaded = None
+base_path = "images"
 
-def generate_sd(prompt: str):
-    global cfg, model
-    return model.generate(prompt).resize((256, 256), Image.Resampling.BICUBIC)
-    
-
-def edit_image(image_upl, image_sd, prompt, guidance_scale, image_guidance_scale):
-    global cfg, model
-    logger.info(f"Editing {image_upl} with prompt: {prompt}")
-    if image_upl is not None:
-        image = Image.fromarray(image_upl)
-    elif image_sd is not None:
-        image = Image.fromarray(image_sd)
-    else:
-        raise ValueError("No image provided")
-    
-    print(f"Image: {image}")
-    kwargs = {
-        "guidance_scale": guidance_scale,
-        "image_guidance_scale": image_guidance_scale,
-    }
-    return model.edit(prompt, image, kwargs=kwargs).resize((256, 256), Image.Resampling.BICUBIC)
-
-
-def zerp_plus(image):
-    image = Image.fromarray(image).resize((256, 256), Image.Resampling.BICUBIC)
-    novel_views = model.novelViewsZeroPlus(image)
-    novel_unpacked = model.unpack_zero_plus_out(novel_views)
-    return novel_unpacked
-
-def zero(images):
-    print(f"Images: {images}")
-    imgs = []
-    for img_metadata in images:
-        response = requests.get(img_metadata["data"])
-        img = Image.open(BytesIO(response.content))
-        imgs.append(img)
-    novel_views = model.novelViewsZero(imgs)
-    return novel_views
-
-
-def save_imgs(edited_img, zero_plus_img, zero_gallery, save_name):
+def load_from_path(save_name):
     save_name = save_name.replace(" ", "_").replace(".", "").replace("/", "")
-    if not os.path.exists(f"images/{save_name}"):
-        os.makedirs(f"images/{save_name}")
-    edited_img.save(f"images/{save_name}/edit.png")
-    for i, img_metadata in enumerate(zero_plus_img):
-        response = requests.get(img_metadata["data"])
-        img = Image.open(BytesIO(response.content))
-        img.save(f"images/{save_name}/novel_zero_plus_view_{i}.png")
-    for i, img_metadata in enumerate(zero_gallery):
-        response = requests.get(img_metadata["data"])
-        img = Image.open(BytesIO(response.content))
-        img.save(f"images/{save_name}/novel_view_{i}.png")
-
-def load_imgs(save_name):
-    save_name = save_name.replace(" ", "_").replace(".", "").replace("/", "")
-    if not os.path.exists(f"images/{save_name}"):
-        raise ValueError(f"Image {save_name} does not exist")
+    if not os.path.exists(os.path.join(base_path, save_name)):
+        raise ValueError(f"Path {save_name} does not exist")
     edited_img = Image.open(f"images/{save_name}/edit.png")
     zero_plus_img = []
     for i in range(6):
@@ -85,6 +27,19 @@ def load_imgs(save_name):
         zero_gallery.append(Image.open(f"images/{save_name}/novel_view_{i}.png"))
     
     return edited_img, zero_plus_img, zero_gallery
+    
+
+def load_imgs(save_name):
+    return load_from_path(save_name)
+
+def generate_gs(path):
+    main(os.path.join(base_path, path))
+
+    return f"images/{path}/gifs/1000.gif", \
+            f"images/{path}/gifs/2000.gif", \
+            f"images/{path}/gifs/4000.gif", \
+            f"images/{path}/gifs/7000.gif", \
+            f"images/{path}/gifs/10000.gif"
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def start_gradio(conf: DictConfig) -> None:
@@ -105,7 +60,11 @@ def start_gradio(conf: DictConfig) -> None:
         # Start Gaussian Splatting
         start_btn = gr.Button("Start Gaussian Splatting")
         gaussian_splatting_gallery = gr.Gallery(label="Gaussian Splatting")
-        start_btn.click(fn=generate_gs, inputs=[frontal_img, zero_plus_side_imgs, zero_side_imgs], outputs=frontal_img, api_name="start_gaussian_splatting")
+        gaussian_splatting_gallery.style(columns=5)
+        start_btn.click(fn=generate_gs, 
+                        inputs=[name], 
+                        outputs=gaussian_splatting_gallery, 
+                        api_name="start_gaussian_splatting")
 
     demo.launch()
 

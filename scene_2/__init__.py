@@ -22,7 +22,7 @@ from scene_2.dataset_readers import sceneLoadTypeCallbacks
 from scene_2.gaussian_model import GaussianModel
 from arguments import ModelParams
 from .dataset_readers import SceneInfo, getNerfppNorm, storePly, CameraInfo, focal2fov, fov2focal
-from .camera_utils import cameraList_from_camInfos, camera_to_JSON
+from .camera_utils import cameraList_from_camInfos, cameraList_from_camInfosGif, camera_to_JSON
 from utils.sh_utils import SH2RGB
 import numpy as np
 from PIL import Image
@@ -49,12 +49,15 @@ class Scene:
         zero_images = [f for f in novels if f.startswith("novel_view")]
         del images
 
-        train_cam_info = generateCameras(frontal_image, zero_plus_images, zero_images, self.images_path)
+        train_cam_info, gif_cam_info = generateCameras(frontal_image, zero_plus_images, zero_images, self.images_path)
         
+        self.gif_cam_info = gif_cam_info
+
         self.gaussians = gaussians
 
         self.train_cameras = {}
         self.test_cameras = {}
+        self.gif_cameras = {}
 
         #### Create scene info
         
@@ -101,6 +104,8 @@ class Scene:
             self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, args)
             print("Loading Test Cameras")
             self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, args)
+            print("Loading gif Cameras")
+            self.gif_cameras[resolution_scale] = cameraList_from_camInfosGif(self.gif_cam_info, resolution_scale, args)
 
         self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent)
 
@@ -113,6 +118,9 @@ class Scene:
 
     def getTestCameras(self, scale=1.0):
         return self.test_cameras[scale]
+    
+    def getGifCameras(self, scale=1.0):
+        return self.gif_cameras[scale]
 
 
 def dot(x, y):
@@ -204,7 +212,7 @@ def rearrange_azimuth_elevation_images(azimuths, elevations, images):
         
     return rearranged_azimuths, rearranged_elevations, rearranged_images
 
-def generateCameras(frontal_image: str, zero_plus_images: List[str], zero_images: List[str], images_path: str, fov = 0.6911112070083618):
+def generateTrainingCameras(frontal_image: str, zero_plus_images: List[str], zero_images: List[str], images_path: str, fov = 0.6911112070083618):
     '''
     Generate cameras from the output of Zero-123
     '''
@@ -244,6 +252,45 @@ def generateCameras(frontal_image: str, zero_plus_images: List[str], zero_images
                         image_path=None, image_name=f"image-{idx}", width=image.size[0], height=image.size[1]))
 
     return cam_infos
+
+def generateGifCameras(fov = 0.6911112070083618):
+    '''
+    Generate cameras from the output of Zero-123
+    '''
+    img_size = 256
+    cam_infos = []
+    fovx = fov
+
+    azimuths = np.linspace(0, 360, 30, endpoint=False).tolist() * 3
+    elevations = (np.sin(np.linspace(0, 2 * np.pi, 30, endpoint=False)) * 30).tolist() * 3
+
+    for idx in range(len(azimuths)):
+
+        c2w = orbit_camera(elevations[idx], azimuths[idx], radius=10.0, is_degree=True, target=None, opengl=True)
+
+        c2w[:3, 1:3] *= -1
+
+        w2c = np.linalg.inv(c2w)
+
+        R = np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
+        T = w2c[:3, 3]
+
+        fovy = focal2fov(fov2focal(fovx, 256), 256)
+        FovY = fovy 
+        FovX = fovx
+
+        cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=None,
+                        image_path=None, image_name=f"image-{idx}", width=img_size, height=img_size))
+
+    return cam_infos
+
+def generateCameras(frontal_image: str, zero_plus_images: List[str], zero_images: List[str], images_path: str, fov = 0.6911112070083618):
+    '''
+    Generate cameras from the output of Zero-123
+    '''
+    trainig_cameras = generateTrainingCameras(frontal_image, zero_plus_images, zero_images, images_path, fov)
+    gif_cameras = generateGifCameras(fov)
+    return trainig_cameras, gif_cameras
 
 
 '''

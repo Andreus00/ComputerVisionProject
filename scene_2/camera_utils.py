@@ -13,6 +13,7 @@ from scene.cameras import Camera
 import numpy as np
 from utils.general_utils import PILtoTorch
 from utils.graphics_utils import fov2focal
+from PIL import Image
 
 WARNED = False
 
@@ -56,6 +57,44 @@ def cameraList_from_camInfos(cam_infos, resolution_scale, args):
 
     for id, c in enumerate(cam_infos):
         camera_list.append(loadCam(args, id, c, resolution_scale))
+
+    return camera_list
+
+
+def loadGifCam(args, id, cam_info, resolution_scale):
+    orig_w, orig_h = (256, 256)
+    dummy_image = np.zeros((orig_h, orig_w, 3), dtype=np.uint8)
+    dummy_image_torch = PILtoTorch(Image.fromarray(dummy_image), (orig_w, orig_h))
+
+    if args.resolution in [1, 2, 4, 8]:
+        resolution = round(orig_w/(resolution_scale * args.resolution)), round(orig_h/(resolution_scale * args.resolution))
+    else:  # should be a type that converts to float
+        if args.resolution == -1:
+            if orig_w > 1600:
+                global WARNED
+                if not WARNED:
+                    print("[ INFO ] Encountered quite large input images (>1.6K pixels width), rescaling to 1.6K.\n "
+                        "If this is not desired, please explicitly specify '--resolution/-r' as 1")
+                    WARNED = True
+                global_down = orig_w / 1600
+            else:
+                global_down = 1
+        else:
+            global_down = orig_w / args.resolution
+
+        scale = float(global_down) * float(resolution_scale)
+        resolution = (int(orig_w / scale), int(orig_h / scale))
+
+    return Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
+                  FoVx=cam_info.FovX, FoVy=cam_info.FovY, 
+                  image=dummy_image_torch, gt_alpha_mask=dummy_image_torch,
+                  image_name=cam_info.image_name, uid=id, data_device=args.data_device)
+
+def cameraList_from_camInfosGif(cam_infos, resolution_scale, args):
+    camera_list = []
+
+    for id, c in enumerate(cam_infos):
+        camera_list.append(loadGifCam(args, id, c, resolution_scale))
 
     return camera_list
 

@@ -62,6 +62,7 @@ def save_imgs(edited_img, zero_plus_img, zero_gallery, save_name):
     save_name = save_name.replace(" ", "_").replace(".", "").replace("/", "")
     if not os.path.exists(f"images/{save_name}"):
         os.makedirs(f"images/{save_name}")
+    edited_img = Image.fromarray(edited_img).resize((256, 256), Image.Resampling.BICUBIC)
     edited_img.save(f"images/{save_name}/edit.png")
     for i, img_metadata in enumerate(zero_plus_img):
         response = requests.get(img_metadata["data"])
