@@ -123,7 +123,7 @@ def start_gradio(conf: DictConfig) -> None:
         save_btn.click(fn=save_imgs, inputs=[edited_img, zero_plus_img, save_name], api_name="save")
 
 
-    demo.launch()
+    demo.launch(share=True)
 
 if __name__ == "__main__":
     start_gradio()

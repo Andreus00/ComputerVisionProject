@@ -62,7 +62,7 @@ def start_gradio(conf: DictConfig) -> None:
                         outputs=gaussian_splatting_gallery, 
                         api_name="start_gaussian_splatting")
 
-    demo.launch()
+    demo.launch(share=True)
 
 if __name__ == "__main__":
     start_gradio()
