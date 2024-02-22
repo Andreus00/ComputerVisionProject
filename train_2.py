@@ -35,6 +35,9 @@ import numpy as np
 from scene_2 import orbit_camera, focal2fov, fov2focal, CameraInfo, cameraList_from_camInfos
 from scene_2.camera_utils import loadDummyCam
 
+
+save_train_gif = False
+
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
@@ -42,6 +45,9 @@ except ImportError:
     TENSORBOARD_FOUND = False
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, path="./out"):
+
+    train_gifs = []
+
     opt.iterations = 1000
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
@@ -115,7 +121,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         #     cv2.imwrite(f"render_image_.png", np.flip(image.permute(1, 2, 0).cpu().numpy(), (2)) * 255)
         gt_image = viewpoint_cam.original_image.cuda()
         Ll1 = l1_loss(image, gt_image)
-        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))            
+        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
 
         if iteration > 500:
             # run guidance
@@ -130,25 +136,29 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 R = np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
                 T = w2c[:3, 3]
                 fovx = 0.6911112070083618
-                fovy = focal2fov(fov2focal(fovx, 512), 512)
+                fovy = focal2fov(fov2focal(fovx, 256), 256)
                 FovY = fovy 
                 FovX = fovx
                 viewpoint_cam_info = CameraInfo(uid=1, R=R, T=T, FovY=FovY, FovX=FovX, image=None,
-                image_path=None, image_name=f"temp", width=512, height=512)
+                image_path=None, image_name=f"temp", width=256, height=256)
                 viewpoint_cam = loadDummyCam(opt, 999, viewpoint_cam_info, 1)
             render_pkg = render(viewpoint_cam, gaussians, pipe, bg)
             image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
             
-            # with torch.no_grad():
-            #     cv2.imwrite(f"render_image.png", np.flip(image.permute(1, 2, 0).cpu().numpy(), (2)) * 255)
-
+            
+                
             step_ratio = iteration / opt.iterations
-            loss += 0.5 * guidance.train_step(image.unsqueeze(0),
+            loss += guidance.train_step(image.unsqueeze(0),
                                         torch.asarray(ver).unsqueeze(0).cpu(),
                                         torch.asarray(hor).unsqueeze(0).cpu(),
                                         torch.asarray(1).unsqueeze(0).cpu(),
-                                        step_ratio=None)
+                                        step_ratio=step_ratio,)
+            
+        if save_train_gif and (iteration % 10 == 0):
+            train_gifs.append(image.detach().cpu())
+
         loss.backward()
+
 
         iter_end.record()
 
@@ -206,6 +216,16 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if (iteration in checkpoint_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
+    
+    if save_train_gif:
+        print("Saving training gif")
+        with imageio.get_writer(os.path.join(scene.model_path, "gifs/train.gif"), mode='I') as writer:
+            for img in train_gifs:
+                img = img.cpu().numpy().transpose(1, 2, 0)
+                img = np.clip(img, 0, 1)
+                img = cv2.resize(img, (512, 512), interpolation=cv2.INTER_CUBIC)
+                img = np.clip(img, 0, 1)
+                writer.append_data((img * 255).astype('uint8'))
 
 
 def prepare_output_and_logger(args):    
